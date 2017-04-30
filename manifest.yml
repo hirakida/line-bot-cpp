@@ -1,5 +1,5 @@
 ---
 applications:
-  - name: line-bot-cpp
+  - name: line-bot-cppcms
     buildpack: https://github.com/cloudfoundry-community/cppcms-buildpack
     random-route: false
