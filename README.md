@@ -2,9 +2,9 @@
 
 use Pivotal Web Services
 
-add Environment Variables
+Add Environment Variables on PWS.
 ```
- ACCESS_TOKEN
+ACCESS_TOKEN
 ```
 
 ```
