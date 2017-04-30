@@ -5,7 +5,7 @@
 #include <cppcms/http_response.h>
 #include <cppcms/url_dispatcher.h>
 #include <cppcms/url_mapper.h>
-#include "line_bot_client.h"
+#include "line_bot_sdk_cppcms.h"
 
 
 class app : public cppcms::application {

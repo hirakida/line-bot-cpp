@@ -1,4 +1,4 @@
-# line-bot-cpp
+# line-bot-cppcms
 
 use Pivotal Web Services
 
