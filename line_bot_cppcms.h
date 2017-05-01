@@ -5,6 +5,7 @@
 #include <cppcms/application.h>
 #include <cppcms/json.h>
 #include <curl/curl.h>
+#include "picojson.h"
 
 namespace line_bot {
 
@@ -18,41 +19,6 @@ namespace line_bot {
         beacon
     };
 
-    // source
-    struct source_user {
-        std::string type;   // user
-        std::string userId;
-    };
-
-    struct source_group {
-        std::string type;   // group
-        std::string groupId;
-    };
-
-    struct source_room {
-        std::string type;   // room
-        std::string roomId;
-    };
-
-    // message event
-    struct text_message {
-        std::string id;
-        std::string type;   // text, image, video, audio, location sticker
-        std::string text;
-    };
-
-    struct message_event {
-        std::string replyToken;
-        std::string type; // message
-        time_t timestamp;
-        source_user source;
-        text_message message;
-    };
-
-    struct message_events {
-        std::vector<message_event> events;
-    };
-
     static bool is_json(const std::string &content_type) {
         std::string::size_type pos = content_type.find("application/json");
         return pos != std::string::npos;
@@ -63,42 +29,72 @@ namespace line_bot {
                && line_bot::is_json(request.content_type());
     }
 
-    static bool is_message_event(std::string type) {
-        return type == "message";
+    static std::string get_reply_token(picojson::object& event) {
+        return event["replyToken"].get<std::string>();
     }
 
-    // まだmessage_event, text_messageのみ
-    static std::vector<message_event> parse_events(cppcms::http::request &request) {
+    // event type
+    static bool is_message_event(picojson::object& event) {
+        return event["type"].get<std::string>() == "message";
+    }
+
+    // source
+    static std::string get_userId(picojson::object& event) {
+        // TODO: group or roomかも判定する
+        return event["source"].get<picojson::object>()["userId"].get<std::string>();
+    }
+
+    // message type
+    static bool is_text(picojson::object& event) {
+        return event["message"].get<picojson::object>()["type"].get<std::string>() == "text";
+    }
+
+    static bool is_sticker(picojson::object& event) {
+        return event["message"].get<picojson::object>()["type"].get<std::string>() == "sticker";
+    }
+
+    // message
+    static std::string get_message_text(picojson::object& event) {
+        return event["message"].get<picojson::object>()["text"].get<std::string>();
+    }
+
+    static std::string get_packageId(picojson::object& event) {
+        return event["message"].get<picojson::object>()["packageId"].get<std::string>();
+    }
+
+    static std::string get_stickerId(picojson::object& event) {
+        return event["message"].get<picojson::object>()["stickerId"].get<std::string>();
+    }
+
+    static picojson::array& parse_events(picojson::value& val, cppcms::http::request &request) {
         std::pair<void *, ssize_t> post = request.raw_post_data();
-        std::istringstream ss(std::string((char *) post.first, (unsigned long) post.second));
-        cppcms::json::value val;
-        val.load(ss, true);
-        message_events events = val.get_value<message_events>();
-        return events.events;
+        std::string err;
+        picojson::parse(val, (const char *) post.first, (const char *) post.first + post.second, &err);
+        if (!err.empty()) {
+            throw std::runtime_error(err.c_str());
+        }
+        picojson::object& obj = val.get<picojson::object>();
+        picojson::array& array = obj["events"].get<picojson::array>();
+        return array;
     }
 
     class client {
     public:
-        enum send_type {
-            send_reply,
-            send_push
-        };
-
-        static void reply_text(std::string replyToken, std::string text) {
+        static void reply_text(std::string reply_token, std::string text) {
             cppcms::json::value val;
-            val["replyToken"] = replyToken;
+            val["replyToken"] = reply_token;
             val["messages"][0]["type"] = "text";
             val["messages"][0]["text"] = text;
-            send_text(val.save(), send_reply);
+            send(val.save(), send_reply);
         }
 
-        static void reply_sticker(std::string replyToken, std::string packageId, std::string stickerId) {
+        static void reply_sticker(std::string reply_token, std::string packageId, std::string stickerId) {
             cppcms::json::value val;
-            val["replyToken"] = replyToken;
+            val["replyToken"] = reply_token;
             val["messages"][0]["type"] = "sticker";
             val["messages"][0]["packageId"] = packageId;
             val["messages"][0]["stickerId"] = stickerId;
-            send_text(val.save(), send_reply);
+            send(val.save(), send_reply);
         }
 
         static void push_text(std::string to, std::string text) {
@@ -106,7 +102,7 @@ namespace line_bot {
             val["to"] = to;
             val["messages"][0]["type"] = "text";
             val["messages"][0]["text"] = text;
-            send_text(val.save(), send_push);
+            send(val.save(), send_push);
         }
 
         static void push_sticker(std::string to, std::string packageId, std::string stickerId) {
@@ -115,11 +111,16 @@ namespace line_bot {
             val["messages"][0]["type"] = "sticker";
             val["messages"][0]["packageId"] = packageId;
             val["messages"][0]["stickerId"] = stickerId;
-            send_text(val.save(), send_push);
+            send(val.save(), send_push);
         }
 
     private:
-        static void send_text(std::string val, send_type type) {
+        enum send_type {
+            send_reply,
+            send_push
+        };
+
+        static void send(std::string val, send_type type) {
 
             CURL *curl = curl_easy_init();
             if (curl == NULL) {
@@ -147,61 +148,6 @@ namespace line_bot {
             curl_easy_cleanup(curl);
         }
     };
-}
-
-namespace cppcms {
-    namespace json {
-        template<>
-        struct traits<line_bot::source_user> {
-            static line_bot::source_user get(cppcms::json::value const &v) {
-                if (v.type() != cppcms::json::is_object)
-                    throw cppcms::json::bad_value_cast();
-                line_bot::source_user p;
-                p.type = v.get<std::string>("type");
-                p.userId = v.get<std::string>("userId");
-                return p;
-            }
-        };
-
-        template<>
-        struct traits<line_bot::text_message> {
-            static line_bot::text_message get(cppcms::json::value const &v) {
-                if (v.type() != cppcms::json::is_object)
-                    throw cppcms::json::bad_value_cast();
-                line_bot::text_message p;
-                p.id = v.get<std::string>("id");
-                p.type = v.get<std::string>("type");
-                p.text = v.get<std::string>("text");
-                return p;
-            }
-        };
-
-        template<>
-        struct traits<line_bot::message_event> {
-            static line_bot::message_event get(cppcms::json::value const &v) {
-                if (v.type() != cppcms::json::is_object)
-                    throw cppcms::json::bad_value_cast();
-                line_bot::message_event p;
-                p.replyToken = v.get<std::string>("replyToken");
-                p.type = v.get<std::string>("type");
-                p.timestamp = v.get<time_t>("timestamp");
-                p.source = v.get<line_bot::source_user>("source");
-                p.message = v.get<line_bot::text_message>("message");
-                return p;
-            }
-        };
-
-        template<>
-        struct traits<line_bot::message_events> {
-            static line_bot::message_events get(cppcms::json::value const &v) {
-                if (v.type() != cppcms::json::is_object)
-                    throw cppcms::json::bad_value_cast();
-                line_bot::message_events p;
-                p.events = v.get<std::vector<line_bot::message_event> >("events");
-                return p;
-            }
-        };
-    }
 }
 
 #endif //LINE_API_CLIENT_H
