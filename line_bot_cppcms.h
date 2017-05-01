@@ -1,7 +1,6 @@
-#ifndef LINE_API_CLIENT_H
-#define LINE_API_CLIENT_H
+#ifndef line_bot_cppcms_h
+#define line_bot_cppcms_h
 
-#include <time.h>
 #include <cppcms/application.h>
 #include <cppcms/json.h>
 #include <curl/curl.h>
@@ -150,4 +149,4 @@ namespace line_bot {
     };
 }
 
-#endif //LINE_API_CLIENT_H
+#endif //line_bot_cppcms_h
