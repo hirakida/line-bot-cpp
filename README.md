@@ -1,6 +1,6 @@
 # line-bot-cppcms
 
-use Pivotal Web Services
+Use Pivotal Web Services
 
 Add Environment Variables on PWS.
 ```
