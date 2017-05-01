@@ -30,6 +30,7 @@ void app::callback() {
         if (line_bot::is_message_event(event.type)) {
             line_bot::client::reply_text(event.replyToken, event.message.text);
             line_bot::client::push_text(event.source.userId, "push message");
+            line_bot::client::push_sticker(event.source.userId, "2", "144");
         }
     }
 }

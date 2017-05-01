@@ -53,17 +53,6 @@ namespace line_bot {
         std::vector<message_event> events;
     };
 
-    // reply
-    struct reply_text_message {
-        std::string type;
-        std::string text;
-    };
-
-    struct reply_body {
-        std::string replyToken;
-        std::vector<reply_text_message> messages;
-    };
-
     static bool is_json(const std::string &content_type) {
         std::string::size_type pos = content_type.find("application/json");
         return pos != std::string::npos;
@@ -78,10 +67,6 @@ namespace line_bot {
         return type == "message";
     }
 
-    static bool is_text_message(std::string type) {
-        return type == "text";
-    }
-
     // まだmessage_event, text_messageのみ
     static std::vector<message_event> parse_events(cppcms::http::request &request) {
         std::pair<void *, ssize_t> post = request.raw_post_data();
@@ -94,29 +79,47 @@ namespace line_bot {
 
     class client {
     public:
-
         enum send_type {
-            reply,
-            push
+            send_reply,
+            send_push
         };
 
         static void reply_text(std::string replyToken, std::string text) {
-            std::string data =
-                    "{ \"replyToken\" : \"" + replyToken +
-                    "\" ,\"messages\" : [{\"type\" : \"text\", \"text\" : \"" + text + "\"}]}";
-            send_text(data, reply);
+            cppcms::json::value val;
+            val["replyToken"] = replyToken;
+            val["messages"][0]["type"] = "text";
+            val["messages"][0]["text"] = text;
+            send_text(val.save(), send_reply);
+        }
+
+        static void reply_sticker(std::string replyToken, std::string packageId, std::string stickerId) {
+            cppcms::json::value val;
+            val["replyToken"] = replyToken;
+            val["messages"][0]["type"] = "sticker";
+            val["messages"][0]["packageId"] = packageId;
+            val["messages"][0]["stickerId"] = stickerId;
+            send_text(val.save(), send_reply);
         }
 
         static void push_text(std::string to, std::string text) {
-            std::string data =
-                    "{ \"to\" : \"" + to +
-                    "\" ,\"messages\" : [{\"type\" : \"text\", \"text\" : \"" + text + "\"}]}";
-            send_text(data, push);
+            cppcms::json::value val;
+            val["to"] = to;
+            val["messages"][0]["type"] = "text";
+            val["messages"][0]["text"] = text;
+            send_text(val.save(), send_push);
+        }
+
+        static void push_sticker(std::string to, std::string packageId, std::string stickerId) {
+            cppcms::json::value val;
+            val["to"] = to;
+            val["messages"][0]["type"] = "sticker";
+            val["messages"][0]["packageId"] = packageId;
+            val["messages"][0]["stickerId"] = stickerId;
+            send_text(val.save(), send_push);
         }
 
     private:
-
-        static void send_text(std::string data, send_type type) {
+        static void send_text(std::string val, send_type type) {
 
             CURL *curl = curl_easy_init();
             if (curl == NULL) {
@@ -130,12 +133,12 @@ namespace line_bot {
             headers = curl_slist_append(headers, "Content-Type: application/json");
             headers = curl_slist_append(headers, header.c_str());
 
-            std::string url = type == reply ? "https://api.line.me/v2/bot/message/reply"
-                                            : "https://api.line.me/v2/bot/message/push";
+            std::string url = type == send_reply ? "https://api.line.me/v2/bot/message/reply"
+                                                 : "https://api.line.me/v2/bot/message/push";
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_POST, 1L);
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.c_str());
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, val.c_str());
 
             CURLcode res = curl_easy_perform(curl);
             if (res != CURLE_OK) {
@@ -181,7 +184,7 @@ namespace cppcms {
                 line_bot::message_event p;
                 p.replyToken = v.get<std::string>("replyToken");
                 p.type = v.get<std::string>("type");
-                p.timestamp = v.get <time_t> ("timestamp");
+                p.timestamp = v.get<time_t>("timestamp");
                 p.source = v.get<line_bot::source_user>("source");
                 p.message = v.get<line_bot::text_message>("message");
                 return p;
