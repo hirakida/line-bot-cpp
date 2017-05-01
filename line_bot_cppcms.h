@@ -1,6 +1,8 @@
 #ifndef LINE_API_CLIENT_H
 #define LINE_API_CLIENT_H
 
+#include <time.h>
+#include <cppcms/application.h>
 #include <cppcms/json.h>
 #include <curl/curl.h>
 
@@ -42,7 +44,7 @@ namespace line_bot {
     struct message_event {
         std::string replyToken;
         std::string type; // message
-        unsigned long timestamp;
+        time_t timestamp;
         source_user source;
         text_message message;
     };
@@ -52,19 +54,24 @@ namespace line_bot {
     };
 
     // reply
-    struct reply_message {
+    struct reply_text_message {
         std::string type;
         std::string text;
     };
 
     struct reply_body {
         std::string replyToken;
-        reply_message messages[1];
+        std::vector<reply_text_message> messages;
     };
 
     static bool is_json(const std::string &content_type) {
         std::string::size_type pos = content_type.find("application/json");
         return pos != std::string::npos;
+    }
+
+    static bool is_callback_request(cppcms::http::request &request) {
+        return request.request_method() == "POST"
+               && line_bot::is_json(request.content_type());
     }
 
     static bool is_message_event(std::string type) {
@@ -76,8 +83,8 @@ namespace line_bot {
     }
 
     // まだmessage_event, text_messageのみ
-    static std::vector<message_event> parse_events(std::pair<void *, size_t> raw_post_data) {
-        std::pair<void *, ssize_t> post = raw_post_data;
+    static std::vector<message_event> parse_events(cppcms::http::request &request) {
+        std::pair<void *, ssize_t> post = request.raw_post_data();
         std::istringstream ss(std::string((char *) post.first, (unsigned long) post.second));
         cppcms::json::value val;
         val.load(ss, true);
@@ -174,7 +181,7 @@ namespace cppcms {
                 line_bot::message_event p;
                 p.replyToken = v.get<std::string>("replyToken");
                 p.type = v.get<std::string>("type");
-                p.timestamp = v.get < unsigned long > ("timestamp");
+                p.timestamp = v.get <time_t> ("timestamp");
                 p.source = v.get<line_bot::source_user>("source");
                 p.message = v.get<line_bot::text_message>("message");
                 return p;
