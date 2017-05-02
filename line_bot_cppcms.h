@@ -8,74 +8,79 @@
 
 namespace line_bot {
 
-    enum event_type {
-        message,
-        follow,
-        unfollow,
-        join,
-        leave,
-        post_back,
-        beacon
-    };
-
     static bool is_json(const std::string &content_type) {
         std::string::size_type pos = content_type.find("application/json");
         return pos != std::string::npos;
     }
 
     static bool is_callback_request(cppcms::http::request &request) {
+        // TODO: Signature validation
         return request.request_method() == "POST"
                && line_bot::is_json(request.content_type());
     }
 
-    static std::string get_reply_token(picojson::object& event) {
-        return event["replyToken"].get<std::string>();
-    }
-
-    // event type
-    static bool is_message_event(picojson::object& event) {
-        return event["type"].get<std::string>() == "message";
-    }
-
-    // source
-    static std::string get_userId(picojson::object& event) {
-        // TODO: group or roomかも判定する
-        return event["source"].get<picojson::object>()["userId"].get<std::string>();
-    }
-
-    // message type
-    static bool is_text(picojson::object& event) {
-        return event["message"].get<picojson::object>()["type"].get<std::string>() == "text";
-    }
-
-    static bool is_sticker(picojson::object& event) {
-        return event["message"].get<picojson::object>()["type"].get<std::string>() == "sticker";
-    }
-
-    // message
-    static std::string get_message_text(picojson::object& event) {
-        return event["message"].get<picojson::object>()["text"].get<std::string>();
-    }
-
-    static std::string get_packageId(picojson::object& event) {
-        return event["message"].get<picojson::object>()["packageId"].get<std::string>();
-    }
-
-    static std::string get_stickerId(picojson::object& event) {
-        return event["message"].get<picojson::object>()["stickerId"].get<std::string>();
-    }
-
-    static picojson::array& parse_events(picojson::value& val, cppcms::http::request &request) {
-        std::pair<void *, ssize_t> post = request.raw_post_data();
-        std::string err;
-        picojson::parse(val, (const char *) post.first, (const char *) post.first + post.second, &err);
-        if (!err.empty()) {
-            throw std::runtime_error(err.c_str());
+    class model {
+    public:
+        static picojson::array &parse_events(picojson::value &val, cppcms::http::request &request) {
+            std::pair<void *, ssize_t> post = request.raw_post_data();
+            std::string err;
+            picojson::parse(val, (const char *) post.first, (const char *) post.first + post.second, &err);
+            if (!err.empty()) {
+                throw std::runtime_error(err.c_str());
+            }
+            picojson::object &obj = val.get<picojson::object>();
+            picojson::array &events = obj["events"].get<picojson::array>();
+            return events;
         }
-        picojson::object& obj = val.get<picojson::object>();
-        picojson::array& array = obj["events"].get<picojson::array>();
-        return array;
-    }
+
+        static std::string replyToken(picojson::object &event) {
+            return event["replyToken"].get<std::string>();
+        }
+
+        // event type
+        static bool is_message_event(picojson::object &event) {
+            return event["type"].get<std::string>() == "message";
+        }
+
+        // source
+        static std::string userId(picojson::object &event) {
+            // TODO: group or roomかも判定する
+            picojson::object &source = event["source"].get<picojson::object>();
+            return source["userId"].get<std::string>();
+        }
+
+        // message type
+        static bool is_text(picojson::object &event) {
+            picojson::object &message = get_message(event);
+            return message["type"].get<std::string>() == "text";
+        }
+
+        static bool is_sticker(picojson::object &event) {
+            picojson::object &message = get_message(event);
+            return message["type"].get<std::string>() == "sticker";
+        }
+
+        // message
+        static std::string text(picojson::object &event) {
+            picojson::object &message = get_message(event);
+            return message["text"].get<std::string>();
+        }
+
+        static std::string packageId(picojson::object &event) {
+            picojson::object &message = get_message(event);
+            return message["packageId"].get<std::string>();
+        }
+
+        static std::string stickerId(picojson::object &event) {
+            picojson::object &message = get_message(event);
+            return message["stickerId"].get<std::string>();
+        }
+
+    private:
+        static picojson::object &get_message(picojson::object &event) {
+            return event["message"].get<picojson::object>();
+        }
+    };
 
     class client {
     public:
