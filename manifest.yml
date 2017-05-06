@@ -1,5 +1,6 @@
 ---
 applications:
-  - name: line-bot-cppcms
+  - name: line-bot-cpp
+    memory: 128m
     buildpack: https://github.com/cloudfoundry-community/cppcms-buildpack
     random-route: false
