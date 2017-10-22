@@ -83,7 +83,6 @@ namespace line_bot {
 
         namespace source {
             static std::string user_id(cppcms::json::value &event) {
-                // TODO: group or roomかも判定する
                 return event.get<std::string>("source.userId");
             }
         }
@@ -158,6 +157,22 @@ namespace line_bot {
             val["messages"][0]["type"] = "sticker";
             val["messages"][0]["packageId"] = packageId;
             val["messages"][0]["stickerId"] = stickerId;
+            post(val.save(), send_reply);
+        }
+
+        static void reply_confirm_template(std::string reply_token) {
+            cppcms::json::value val;
+            val["replyToken"] = reply_token;
+            val["messages"][0]["type"] = "template";
+            val["messages"][0]["altText"] = "confirm template";
+            val["messages"][0]["template"]["type"] = "confirm";
+            val["messages"][0]["template"]["text"] = "Are you sure?";
+            val["messages"][0]["template"]["actions"][0]["type"] = "message";
+            val["messages"][0]["template"]["actions"][0]["label"] = "Yes";
+            val["messages"][0]["template"]["actions"][0]["text"] = "yes";
+            val["messages"][0]["template"]["actions"][1]["type"] = "message";
+            val["messages"][0]["template"]["actions"][1]["label"] = "No";
+            val["messages"][0]["template"]["actions"][1]["text"] = "no";
             post(val.save(), send_reply);
         }
 
