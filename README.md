@@ -1,8 +1,6 @@
 # line-bot-cppcms
 
-Use Pivotal Web Services
-
-Add Environment Variables on PWS.
+Add Environment Variable
 ```
 ACCESS_TOKEN
 ```
